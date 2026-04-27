@@ -1,5 +1,7 @@
 package com.sweep.project.route.controller;
 
+import com.sweep.project.route.bus.BusArrivalCheckRequest;
+import com.sweep.project.route.bus.BusArrivalCheckResult;
 import com.sweep.project.route.bus.BusArrivalInfo;
 import com.sweep.project.route.bus.BusArrivalService;
 import com.sweep.project.route.*;
@@ -31,6 +33,18 @@ public class RouteController {
     private final TrafficRouteStragy trafficRouteStragy;
     private final BusArrivalService busArrivalService;
 
+    @Operation(summary = "Yen's K-Shortest 기반 최적 버스 경로 탐색",
+            description = "Yen's K-Shortest Paths 알고리즘으로 희망 도착 시각 내 최적 경로를 비용 오름차순 최대 3개 반환합니다. " +
+                    "버스 대기 비용은 '도착시간 - 누적이동시간' 으로 계산되어 환승 순서에 따른 정확한 대기 시간이 반영됩니다.")
+    @PostMapping("/bus/best")
+    public ApiResponseUtil<BusArrivalCheckResult> findBestBusRoutes(
+            @RequestBody BusArrivalCheckRequest request) {
+        BusArrivalCheckResult result = busArrivalService.findKBestRoutes(
+                request.getDesiredArrivalTime(),
+                request.getSegments(), request.getWalkSeconds(),
+                request.getTotalSeconds());
+        return ApiResponseUtil.SuccessApiResponse("ok", result);
+    }
     /**
      * 버스 도착 정보 조회.
      * GET /route/bus/arrival?stId=&busRouteId=&ord=&providerCode=
