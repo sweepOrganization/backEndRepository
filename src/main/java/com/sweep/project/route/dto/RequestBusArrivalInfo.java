@@ -3,6 +3,7 @@ package com.sweep.project.route.dto;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,4 +24,12 @@ public class RequestBusArrivalInfo {
     @NotNull
     @Schema(description = "버스 정보 제공 기관 코드. 2=경기도, 4=서울(기본값)", example = "4")
     public int providerCode;
+
+    @Builder
+    public RequestBusArrivalInfo(String stId, String busRouteId, int ord, int providerCode) {
+        this.stId = stId;
+        this.busRouteId = busRouteId;
+        this.ord = ord;
+        this.providerCode = providerCode;
+    }
 }

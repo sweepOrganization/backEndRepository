@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Objects;
 
 @Schema(description = "버스 전용 경로 정보 (ODsay pathType=2)")
 @Data
@@ -102,6 +103,17 @@ public class BusRoute implements TrafficResponse {
         @Override
         public int getTrafficType() {
             return 2;
+        }
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            BusSegment that = (BusSegment) o;
+            return Objects.equals(localBusStationId, that.localBusStationId)
+                    && Objects.equals(localBusId, that.localBusId);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(localBusStationId, localBusId);
         }
     }
 }

@@ -110,22 +110,38 @@ public class RouteController {
             @Parameter(description = "목적지 경도", example = "127.0276", required = true)
             @RequestParam double endLon,
             @Parameter(description = "목적지 도착 희망 시각 (ISO 8601 형식)", example = "2024-06-01T09:00:00", required = true)
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime arrivalTime) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime arrivalTime,
+            @Parameter(description = "루트 조회시에 버스에대한 실시간 도착정보가 필요한경우 true값을주사면됩니다", required = true)
+            @RequestParam Boolean needRealTimeData) {
         List<? extends TrafficResponse> routes = trafficRouteStragy.getRoutes(type, startLat, startLon, endLat, endLon);
         if (routes.isEmpty()) {
-            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(null, null, null));
+            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(null, null,null));
         }
         List<BoardingInfo> boardingInfos = trafficRouteStragy.getBoardingInfo(type, arrivalTime, routes);
 
-        List<BusArrivalCheckResult> busArrivalResults = null;
-        if (type == PathSearchType.PATH_TYPE_BUS) {
-            busArrivalResults = routes.stream()
-                    .filter(r -> r instanceof BusRoute)
-                    .map(r -> busArrivalService.findKBestForRoute((BusRoute) r, arrivalTime))
-                    .collect(Collectors.toList());
-        }
 
-        return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(routes, boardingInfos, busArrivalResults));
+        if(type==PathSearchType.PATH_TYPE_BUS&&needRealTimeData){
+            List<RequestBusArrivalInfo> requestBusArrivalInfos=routes.stream().map(x->{
+                BusRoute busRoute=(BusRoute) x;
+
+                return busRoute.getSegments().stream().filter(y->{
+                    return y.getTrafficType()==TrafficType.TRAFFIC_TYPE_BUS.trafficNumber;
+                }).map(y->{
+                    return (BusRoute.BusSegment) y;
+                }).toList();
+            }).flatMap(List::stream).distinct().map(x->{
+                return RequestBusArrivalInfo.builder()
+                        .busRouteId(x.getLocalBusId())
+                        .ord(0)
+                        .providerCode(x.getBusProviderCode())
+                        .stId(x.getLocalBusStationId())
+                        .build();
+            }).toList();
+
+            List<BusArrivalInfo> busArrivalInfos=busArrivalService.bulkBusArrival(requestBusArrivalInfos);
+            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(routes, boardingInfos,busArrivalInfos));
+        }
+        return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(routes, boardingInfos,null));
     }
 
 

@@ -48,16 +48,16 @@ public class SegmentBoardingInfo {
     @Schema(description = "환승 지점 여부. false: 최초 탑승, true: 환승 지점", example = "false")
     private boolean transferPoint;
 
-    @Schema(description = "이 지점에서 늦어도 이 시각에 탑승해야 목적지 도착 시각을 맞출 수 있음", example = "08:45:00")
+    @Schema(description = "이 지점에서 늦어도 이 시각에 탑승해야 목적지 도착 시각을 맞출 수 있음. 즉 해당열차가 해당 역에서 이때 출발한다 이소리.", example = "08:45:00")
     private LocalTime latestBoardingTime;
 
-    @Schema(description = "지하철 구간인 경우 이용 가능한 열차 목록 (최대 3편성). 버스 구간이면 null")
+    @Schema(description = "지하철 구간인 경우 이용 가능한 열차 목록 (최대 3편성)-->지금은 1개만 주고있음. 버스 구간이면 null")
     private List<SubwayBoardingInfo.TrainSchedule> availableTrains;
 
     @Schema(description = "버스 구간인 경우 탑승 정류소에 곧 도착하는 버스 목록 (최대 2대). 지하철 구간이면 null")
     private List<BusBoardingInfo.ArrivingBus> arrivingBuses;
 
-    @Schema(description = "환승 열차가 이 역에 도착하는 시각. 첫 탑승 구간이거나 버스 구간이면 null", example = "08:48:00")
+    @Schema(description = "환승 열차가 있는곳까지 사람이 도착하는대 걸리는 시간. 첫 탑승 구간이거나 버스 구간이면 null", example = "08:48:00")
     private LocalTime trainArrivalTime;
 
     @Schema(description = "환승 도보 이동 소요 시간 (분). 첫 탑승 구간이거나 도보 환승 없으면 0", example = "3")
