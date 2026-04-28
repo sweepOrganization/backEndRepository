@@ -26,7 +26,7 @@ public class BusArrivalCheckResult {
         @Schema(description = "버스 구간만의 예상 완료 시각 (도보 시간 미포함)", example = "08:52:00")
         private LocalTime estimatedBusEndTime;
 
-        @Schema(description = "유효 마감(desiredArrivalTime - walkingMinutes)과의 차이(분). 음수=여유, 양수=지연", example = "-3")
+        @Schema(description = "유효 마감(desiredArrivalTime - 예측 도착 시간)과의 차이(분). 음수=안됨, 양수=여유", example = "-3")
         private long diffMinutes;
 
         @Schema(description = "구간별 상세 결과. segmentIndex 오름차순")

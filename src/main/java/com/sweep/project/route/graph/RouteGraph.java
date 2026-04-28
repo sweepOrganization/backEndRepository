@@ -1,6 +1,9 @@
 package com.sweep.project.route.graph;
 
+import io.opentelemetry.instrumentation.api.internal.cache.concurrentlinkedhashmap.ConcurrentLinkedHashMap;
+
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 시간 의존적 대중교통 그래프 + Yen's K-Shortest Paths.
@@ -26,7 +29,7 @@ public class RouteGraph {
     private static final double INF = Double.POSITIVE_INFINITY;
 
     /** 인접 리스트: node id → 출발 엣지 목록 */
-    private final Map<String, List<RouteEdge>> adj = new LinkedHashMap<>();
+    private final LinkedHashMap<String, List<RouteEdge>> adj = new LinkedHashMap<>();
 
     // ── 그래프 구성 ─────────────────────────────────────────────────────────
 
@@ -68,10 +71,11 @@ public class RouteGraph {
      *
      * @param from 출발 노드 ID
      * @param edge 추가할 엣지 (WalkEdge 또는 BusEdge)
+     * addEdge가  completablefuture기반으로 호출중이므로 thread safe를 위해서 투입.
      */
-    public void addEdge(String from, RouteEdge edge) {
-        adj.computeIfAbsent(from, k -> new ArrayList<>()).add(edge);
-        adj.putIfAbsent(edge.to(), new ArrayList<>());
+    public  void addEdge(String from, RouteEdge edge) {
+            adj.computeIfAbsent(from, k -> new ArrayList<>()).add(edge);
+            adj.putIfAbsent(edge.to(), new ArrayList<>());
     }
 
     // ── 내부 유틸 ────────────────────────────────────────────────────────────

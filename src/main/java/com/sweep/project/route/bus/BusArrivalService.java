@@ -2,6 +2,9 @@ package com.sweep.project.route.bus;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sweep.project.route.RouteSegment;
+import com.sweep.project.route.domain.WalkSegment;
+import com.sweep.project.route.dto.RequestBusArrivalInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,12 +28,10 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +48,7 @@ public class BusArrivalService {
     private final BusStationOrdService busStationOrdService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final Executor asyncExecutor;
 
     @Value("${api-key.korea-data-portal}")
     private String busApiKey;
@@ -56,6 +58,26 @@ public class BusArrivalService {
 
     @Value("${bus.api.arrival.gbis-url}")
     private String gbisArrivalUrl;
+
+
+    public List<BusArrivalInfo>bulkBusArrival(List<RequestBusArrivalInfo> requestBusArrivalInfos){
+
+        List<CompletableFuture<BusArrivalInfo>> futures=requestBusArrivalInfos.stream()
+                .map(x-> CompletableFuture.supplyAsync(()-> {
+                            return getBusArrival(x.getStId(), x.getBusRouteId(), x.getOrd(), x.getProviderCode());
+                        },asyncExecutor))
+        .toList();
+        try {
+                CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();  // 반드시 await
+        }
+        catch (CompletionException e){
+                throw new RuntimeException(e.getCause());
+        }
+        return futures.stream().map(x->{
+            return x.join();
+        }).toList();
+
+    }
 
 
     public BusArrivalInfo getBusArrival(String stId, String busRouteId, int ord, int providerCode) {
@@ -216,7 +238,7 @@ public class BusArrivalService {
         Map<Integer, Integer> walks = (walkSeconds != null) ? walkSeconds : Collections.emptyMap();
 
         RouteGraph graph = new RouteGraph();
-        IdentityHashMap<BusEdge, EdgeMeta> edgeMeta = new IdentityHashMap<>();
+        IdentityHashMap<BusEdge, EdgeMeta> edgeMeta =new IdentityHashMap<>();
 
         /*
          * 경계 i(0~segCount) 마다 WalkEdge를 삽입하고, 각 버스 구간의 BusEdge를 연결한다.
@@ -233,15 +255,28 @@ public class BusArrivalService {
 
             // 해당 구간의 모든 버스 후보 엣지
             String afterBusNode = "Q_" + boundaryIdx;
-            for (BusArrivalCheckRequest.BusSegmentQuery q : entry.getValue()) {
-                BusArrivalInfo info = getBusArrival(
-                        q.getStId(), q.getBusRouteId(), q.getOrd(), q.getProviderCode());
-                BusEdge edge = new BusEdge(afterBusNode,
-                        info.getTraTime1(), info.getTraTime2(),
-                        q.getSectionTime() * 60.0);
-                graph.addEdge(platformNode, edge);
-                edgeMeta.put(edge, new EdgeMeta(entry.getKey(), q, info));
+
+            List<CompletableFuture<Pair>> futures = entry.getValue().stream()
+                    .map(x -> CompletableFuture.supplyAsync(() -> {
+                        BusArrivalInfo info = getBusArrival(
+                                x.getStId(), x.getBusRouteId(), x.getOrd(), x.getProviderCode());
+                        BusEdge edge = new BusEdge(afterBusNode,
+                                info.getTraTime1(), info.getTraTime2(),
+                                x.getSectionTime() * 60.0);
+                        return new Pair(edge,new EdgeMeta(entry.getKey(), x, info));
+                    },asyncExecutor))
+                    .collect(Collectors.toList()); // 타입 지정
+            try {
+                CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();  // 반드시 await
             }
+            catch (CompletionException e){
+                throw new RuntimeException(e.getCause());
+            }
+            futures.stream().forEach(f->{
+                Pair p = f.join();
+                graph.addEdge(platformNode, p.busEdge());
+                edgeMeta.put(p.busEdge, p.edgeMeta());
+            });
 
             prevNode = afterBusNode;
             boundaryIdx++;
@@ -312,9 +347,63 @@ public class BusArrivalService {
                 feasible, finalArrival.toLocalTime(), diffMinutes, segResults);
     }
 
+    public BusArrivalCheckResult findKBestForRoute(BusRoute route, LocalDateTime arrivalTime) {
+        Map<Integer, List<BusArrivalCheckRequest.BusSegmentQuery>> segments = new LinkedHashMap<>();
+        Map<Integer, Integer> walkSeconds = new HashMap<>();
+
+        int busIdx = 0;
+        String lastStartStopId = null;
+        int pendingWalkSec = 0;
+        boolean hasPendingWalk = false;
+
+        for (RouteSegment seg : route.getSegments()) {
+            if (seg instanceof WalkSegment walk) {
+                pendingWalkSec = walk.getSectionTime() * 60;
+                hasPendingWalk = true;
+            } else if (seg instanceof BusRoute.BusSegment bus) {
+                String stopId = bus.getLocalBusStationId();
+                if (lastStartStopId == null) {
+                    // 첫 버스 → 앞 도보 할당
+                    if (hasPendingWalk) {
+                        walkSeconds.put(busIdx, pendingWalkSec);
+                        hasPendingWalk = false;
+                    }
+                } else if (!stopId.equals(lastStartStopId)) {
+                    // 새 승차 지점 → 환승 도보 할당 후 인덱스 증가
+                    busIdx++;
+                    if (hasPendingWalk) {
+                        walkSeconds.put(busIdx, pendingWalkSec);
+                        hasPendingWalk = false;
+                    }
+                }
+                BusArrivalCheckRequest.BusSegmentQuery query = new BusArrivalCheckRequest.BusSegmentQuery();
+                query.setBusRouteId(bus.getLocalBusId());
+                query.setStId(stopId);
+                query.setOrd(bus.getStartStopOrder());
+                query.setProviderCode(bus.getBusProviderCode());
+                query.setSectionTime(bus.getSectionTime());
+                segments.computeIfAbsent(busIdx, k -> new ArrayList<>()).add(query);
+                lastStartStopId = stopId;
+            }
+        }
+        // 마지막 버스 이후 목적지까지 도보
+        if (hasPendingWalk) {
+            walkSeconds.put(busIdx + 1, pendingWalkSec);
+        }
+
+        return findKBestRoutes(
+                arrivalTime,
+                segments,
+                walkSeconds,
+                route.getTotalTime() * 60);
+    }
+
+
     /** BusEdge에 연결된 원본 쿼리·도착 정보 묶음. */
     private record EdgeMeta(
             int segmentIndex,
             BusArrivalCheckRequest.BusSegmentQuery query,
             BusArrivalInfo info) {}
+
+    private record Pair(BusEdge busEdge,EdgeMeta edgeMeta){}
 }

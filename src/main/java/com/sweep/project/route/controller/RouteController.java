@@ -4,9 +4,12 @@ import com.sweep.project.route.bus.BusArrivalCheckRequest;
 import com.sweep.project.route.bus.BusArrivalCheckResult;
 import com.sweep.project.route.bus.BusArrivalInfo;
 import com.sweep.project.route.bus.BusArrivalService;
+import com.sweep.project.route.bus.BusRoute;
 import com.sweep.project.route.*;
 import com.sweep.project.route.domain.PathSearchType;
 import com.sweep.project.route.domain.RouteResponse;
+import com.sweep.project.route.domain.WalkSegment;
+import com.sweep.project.route.dto.RequestBusArrivalInfo;
 import com.sweep.project.util.ApiResponseUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,7 +25,12 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/route")
@@ -64,16 +72,9 @@ public class RouteController {
                     content = @Content(schema = @Schema(implementation = ApiResponseUtil.class)))
     })
     @GetMapping("/bus/arrival")
-    public ApiResponseUtil<BusArrivalInfo> getBusArrival(
-            @Parameter(description = "버스 정류소 ID (BIS 기준)", example = "100000080", required = true)
-            @RequestParam String stId,
-            @Parameter(description = "버스 노선 ID (BIS 기준)", example = "100100118", required = true)
-            @RequestParam String busRouteId,
-            @Parameter(description = "노선 내 정류소 순번. 0이면 BIS API로 자동 조회", example = "0")
-            @RequestParam(defaultValue = "0") int ord,
-            @Parameter(description = "버스 정보 제공 기관 코드. 2=경기도, 4=서울(기본값)", example = "4")
-            @RequestParam(defaultValue = "4") int providerCode) {
-        return ApiResponseUtil.SuccessApiResponse("ok",busArrivalService.getBusArrival(stId, busRouteId, ord, providerCode));
+    public ApiResponseUtil<List<BusArrivalInfo>> getBusArrival(@RequestBody List<RequestBusArrivalInfo> requestBusArrivalInfos) {
+        return ApiResponseUtil.SuccessApiResponse("ok"
+                ,busArrivalService.bulkBusArrival(requestBusArrivalInfos));
     }
 
     /**
@@ -112,9 +113,20 @@ public class RouteController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime arrivalTime) {
         List<? extends TrafficResponse> routes = trafficRouteStragy.getRoutes(type, startLat, startLon, endLat, endLon);
         if (routes.isEmpty()) {
-            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(null, null));
+            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(null, null, null));
         }
         List<BoardingInfo> boardingInfos = trafficRouteStragy.getBoardingInfo(type, arrivalTime, routes);
-        return ApiResponseUtil.SuccessApiResponse("ok",new RouteResponse(routes, boardingInfos));
+
+        List<BusArrivalCheckResult> busArrivalResults = null;
+        if (type == PathSearchType.PATH_TYPE_BUS) {
+            busArrivalResults = routes.stream()
+                    .filter(r -> r instanceof BusRoute)
+                    .map(r -> busArrivalService.findKBestForRoute((BusRoute) r, arrivalTime))
+                    .collect(Collectors.toList());
+        }
+
+        return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(routes, boardingInfos, busArrivalResults));
     }
+
+
 }

@@ -84,7 +84,7 @@ public class BusRoute implements TrafficResponse {
         @Schema(description = "탑승 정류소 ID (ODsay subPath.startID). /route/bus/arrival의 stId 파라미터로 사용", example = "100000080")
         private int startStopId;
 
-        @Schema(description = "노선 내 탑승 정류소 순번(ord). 0이면 /route/bus/arrival 호출 시 서버가 자동 조회", example = "0")
+        @Schema(description = "노선 내 탑승 정류소 순번(ord). 아마 값이 0으로 전달될탠대 그냥 가져다가쓰면됩니다. 0이면 /route/bus/arrival 호출 시 서버가 자동 조회", example = "0")
         private int startStopOrder;
 
         @Schema(description = "지역 BIS 출발 정류장 ID (BIS 제공 지역에만 존재). ODsay subPath.startLocalStationID", example = "124000414")
