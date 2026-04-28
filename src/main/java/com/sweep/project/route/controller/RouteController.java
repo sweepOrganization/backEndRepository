@@ -1,10 +1,15 @@
 package com.sweep.project.route.controller;
 
+import com.sweep.project.route.bus.BusArrivalCheckRequest;
+import com.sweep.project.route.bus.BusArrivalCheckResult;
 import com.sweep.project.route.bus.BusArrivalInfo;
 import com.sweep.project.route.bus.BusArrivalService;
+import com.sweep.project.route.bus.BusRoute;
 import com.sweep.project.route.*;
 import com.sweep.project.route.domain.PathSearchType;
 import com.sweep.project.route.domain.RouteResponse;
+import com.sweep.project.route.domain.WalkSegment;
+import com.sweep.project.route.dto.RequestBusArrivalInfo;
 import com.sweep.project.util.ApiResponseUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,7 +25,12 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/route")
@@ -31,6 +41,18 @@ public class RouteController {
     private final TrafficRouteStragy trafficRouteStragy;
     private final BusArrivalService busArrivalService;
 
+    @Operation(summary = "Yen's K-Shortest 기반 최적 버스 경로 탐색",
+            description = "Yen's K-Shortest Paths 알고리즘으로 희망 도착 시각 내 최적 경로를 비용 오름차순 최대 3개 반환합니다. " +
+                    "버스 대기 비용은 '도착시간 - 누적이동시간' 으로 계산되어 환승 순서에 따른 정확한 대기 시간이 반영됩니다.")
+    @PostMapping("/bus/best")
+    public ApiResponseUtil<BusArrivalCheckResult> findBestBusRoutes(
+            @RequestBody BusArrivalCheckRequest request) {
+        BusArrivalCheckResult result = busArrivalService.findKBestRoutes(
+                request.getDesiredArrivalTime(),
+                request.getSegments(), request.getWalkSeconds(),
+                request.getTotalSeconds());
+        return ApiResponseUtil.SuccessApiResponse("ok", result);
+    }
     /**
      * 버스 도착 정보 조회.
      * GET /route/bus/arrival?stId=&busRouteId=&ord=&providerCode=
@@ -50,16 +72,9 @@ public class RouteController {
                     content = @Content(schema = @Schema(implementation = ApiResponseUtil.class)))
     })
     @GetMapping("/bus/arrival")
-    public ApiResponseUtil<BusArrivalInfo> getBusArrival(
-            @Parameter(description = "버스 정류소 ID (BIS 기준)", example = "100000080", required = true)
-            @RequestParam String stId,
-            @Parameter(description = "버스 노선 ID (BIS 기준)", example = "100100118", required = true)
-            @RequestParam String busRouteId,
-            @Parameter(description = "노선 내 정류소 순번. 0이면 BIS API로 자동 조회", example = "0")
-            @RequestParam(defaultValue = "0") int ord,
-            @Parameter(description = "버스 정보 제공 기관 코드. 2=경기도, 4=서울(기본값)", example = "4")
-            @RequestParam(defaultValue = "4") int providerCode) {
-        return ApiResponseUtil.SuccessApiResponse("ok",busArrivalService.getBusArrival(stId, busRouteId, ord, providerCode));
+    public ApiResponseUtil<List<BusArrivalInfo>> getBusArrival(@RequestBody List<RequestBusArrivalInfo> requestBusArrivalInfos) {
+        return ApiResponseUtil.SuccessApiResponse("ok"
+                ,busArrivalService.bulkBusArrival(requestBusArrivalInfos));
     }
 
     /**
@@ -95,12 +110,39 @@ public class RouteController {
             @Parameter(description = "목적지 경도", example = "127.0276", required = true)
             @RequestParam double endLon,
             @Parameter(description = "목적지 도착 희망 시각 (ISO 8601 형식)", example = "2024-06-01T09:00:00", required = true)
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime arrivalTime) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime arrivalTime,
+            @Parameter(description = "루트 조회시에 버스에대한 실시간 도착정보가 필요한경우 true값을주사면됩니다", required = true)
+            @RequestParam Boolean needRealTimeData) {
         List<? extends TrafficResponse> routes = trafficRouteStragy.getRoutes(type, startLat, startLon, endLat, endLon);
         if (routes.isEmpty()) {
-            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(null, null));
+            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(null, null,null));
         }
         List<BoardingInfo> boardingInfos = trafficRouteStragy.getBoardingInfo(type, arrivalTime, routes);
-        return ApiResponseUtil.SuccessApiResponse("ok",new RouteResponse(routes, boardingInfos));
+
+
+        if(type==PathSearchType.PATH_TYPE_BUS&&needRealTimeData){
+            List<RequestBusArrivalInfo> requestBusArrivalInfos=routes.stream().map(x->{
+                BusRoute busRoute=(BusRoute) x;
+
+                return busRoute.getSegments().stream().filter(y->{
+                    return y.getTrafficType()==TrafficType.TRAFFIC_TYPE_BUS.trafficNumber;
+                }).map(y->{
+                    return (BusRoute.BusSegment) y;
+                }).toList();
+            }).flatMap(List::stream).distinct().map(x->{
+                return RequestBusArrivalInfo.builder()
+                        .busRouteId(x.getLocalBusId())
+                        .ord(0)
+                        .providerCode(x.getBusProviderCode())
+                        .stId(x.getLocalBusStationId())
+                        .build();
+            }).toList();
+
+            List<BusArrivalInfo> busArrivalInfos=busArrivalService.bulkBusArrival(requestBusArrivalInfos);
+            return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(routes, boardingInfos,busArrivalInfos));
+        }
+        return ApiResponseUtil.SuccessApiResponse("ok", new RouteResponse(routes, boardingInfos,null));
     }
+
+
 }

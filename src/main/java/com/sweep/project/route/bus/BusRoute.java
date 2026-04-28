@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Objects;
 
 @Schema(description = "버스 전용 경로 정보 (ODsay pathType=2)")
 @Data
@@ -84,7 +85,7 @@ public class BusRoute implements TrafficResponse {
         @Schema(description = "탑승 정류소 ID (ODsay subPath.startID). /route/bus/arrival의 stId 파라미터로 사용", example = "100000080")
         private int startStopId;
 
-        @Schema(description = "노선 내 탑승 정류소 순번(ord). 0이면 /route/bus/arrival 호출 시 서버가 자동 조회", example = "0")
+        @Schema(description = "노선 내 탑승 정류소 순번(ord). 아마 값이 0으로 전달될탠대 그냥 가져다가쓰면됩니다. 0이면 /route/bus/arrival 호출 시 서버가 자동 조회", example = "0")
         private int startStopOrder;
 
         @Schema(description = "지역 BIS 출발 정류장 ID (BIS 제공 지역에만 존재). ODsay subPath.startLocalStationID", example = "124000414")
@@ -102,6 +103,17 @@ public class BusRoute implements TrafficResponse {
         @Override
         public int getTrafficType() {
             return 2;
+        }
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            BusSegment that = (BusSegment) o;
+            return Objects.equals(localBusStationId, that.localBusStationId)
+                    && Objects.equals(localBusId, that.localBusId);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(localBusStationId, localBusId);
         }
     }
 }
