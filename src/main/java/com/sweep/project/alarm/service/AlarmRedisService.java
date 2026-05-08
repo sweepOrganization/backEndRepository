@@ -53,9 +53,10 @@ public class AlarmRedisService {
         log.info("출발 시간:{}--- 현재시간:{}",departureTime,now);
         log.info("출발 알림이 생성이 가능한가?:{}",departureTime.isAfter(now));
 
-        // 출발 10분 전 알림도 기존 "N분 후에 출발" 문구를 쓰도록 prepare-remain-10 key로 등록한다.
+        // 반복 알림이 10분 전을 이미 만들면, 같은 문구의 출발 10분 전 알림은 중복 등록하지 않는다.
         LocalDateTime departureBeforeTime = departureTime.minusMinutes(BEFORE_ALARM_MINUTES);
-        if (departureBeforeTime.isAfter(now)) {
+        if (departureBeforeTime.isAfter(now)
+                && !isDepartureBeforeCoveredByPrepareInterval(prepareTime, interval)) {
             long ttl = Duration.between(now, departureBeforeTime).toMillis();
             for (String token : tokens) {
                 entries.add(new RedisAlarmEntry(
@@ -174,6 +175,13 @@ public class AlarmRedisService {
     private String buildPrepareBeforeKey(Long memberId, Long alarmId, String token) {
         return "alarm-" + memberId + "-" + alarmId + "-prepare-before-" +
                 BEFORE_ALARM_MINUTES + "-" + token + "-" + BEFORE_ALARM_INDEX_OFFSET;
+    }
+
+    private boolean isDepartureBeforeCoveredByPrepareInterval(Integer prepareTime, Integer interval) {
+        if (prepareTime == null || interval == null || interval <= 0) return false;
+
+        int beforeMinutes = (int) BEFORE_ALARM_MINUTES;
+        return prepareTime > beforeMinutes && (prepareTime - beforeMinutes) % interval == 0;
     }
 
     private record RedisAlarmEntry(String key, long ttlMillis) {}
