@@ -21,6 +21,8 @@ import java.util.List;
 public class AlarmRedisService {
 
     private static final byte[] EMPTY_VALUE = new byte[0];
+    private static final long BEFORE_ALARM_MINUTES = 10L;           // 10분 전 알림 기준값
+    private static final int BEFORE_ALARM_INDEX_OFFSET = 10000;     // 기본 알림 index(0,1,2...)와 겹치지 않게 크게 띄운 값
 
     private final StringRedisTemplate redisTemplate;
 
@@ -51,6 +53,18 @@ public class AlarmRedisService {
         log.info("출발 시간:{}--- 현재시간:{}",departureTime,now);
         log.info("출발 알림이 생성이 가능한가?:{}",departureTime.isAfter(now));
 
+        // 반복 알림이 10분 전을 이미 만들면, 같은 문구의 출발 10분 전 알림은 중복 등록하지 않는다.
+        LocalDateTime departureBeforeTime = departureTime.minusMinutes(BEFORE_ALARM_MINUTES);
+        if (departureBeforeTime.isAfter(now)
+                && !isDepartureBeforeCoveredByPrepareInterval(prepareTime, interval)) {
+            long ttl = Duration.between(now, departureBeforeTime).toMillis();
+            for (String token : tokens) {
+                entries.add(new RedisAlarmEntry(
+                        buildKey(memberId, alarmId, AlarmType.PREPARE, token,
+                                BEFORE_ALARM_INDEX_OFFSET, (int) BEFORE_ALARM_MINUTES), ttl));
+            }
+        }
+
         // 출발 알람
         if (departureTime.isAfter(now)) {
             long ttl = Duration.between(now, departureTime).toMillis();
@@ -60,18 +74,39 @@ public class AlarmRedisService {
             }
         }
 
-        // 준비 알람 — 미래 트리거만
-        if (prepareTime != null && interval != null && interval > 0) {
+        // 준비 알림 — interval=0이면 반복 알림은 끄고, 준비 시작/준비 10분 전 알림만 등록한다.
+        if (prepareTime != null && interval != null && prepareTime > 0) {
             LocalDateTime prepareStart = departureTime.minusMinutes(prepareTime);
-            int count = prepareTime / interval;
-            for (int i = 0; i < count; i++) {
-                LocalDateTime triggerTime = prepareStart.plusMinutes((long) i * interval);
-                if (triggerTime.isAfter(now)) {
+
+            // 준비 시작 10분 전 알림은 "10분 후에 준비해야 해요" 문구를 위해 prepare-before key로 구분한다.
+            LocalDateTime prepareBeforeTime = prepareStart.minusMinutes(BEFORE_ALARM_MINUTES);
+            if (prepareBeforeTime.isAfter(now)) {
+                long ttl = Duration.between(now, prepareBeforeTime).toMillis();
+                for (String token : tokens) {
+                    entries.add(new RedisAlarmEntry(
+                            buildPrepareBeforeKey(memberId, alarmId, token), ttl));
+                }
+            }
+
+            if (prepareStart.isAfter(now)) {
+                long ttl = Duration.between(now, prepareStart).toMillis();
+                for (String token : tokens) {
+                    entries.add(new RedisAlarmEntry(
+                            buildKey(memberId, alarmId, AlarmType.PREPARE, token, 0, prepareTime), ttl));
+                }
+            }
+
+            if (interval > 0) {
+                int count = prepareTime / interval;
+                for (int i = 1; i < count; i++) {
+                    LocalDateTime triggerTime = prepareStart.plusMinutes((long) i * interval);
                     int remainingMinutes = prepareTime - (i * interval);
-                    long ttl = Duration.between(now, triggerTime).toMillis();
-                    for (String token : tokens) {
-                        entries.add(new RedisAlarmEntry(
-                                buildKey(memberId, alarmId, AlarmType.PREPARE, token, i, remainingMinutes), ttl));
+                    if (triggerTime.isAfter(now)) {
+                        long ttl = Duration.between(now, triggerTime).toMillis();
+                        for (String token : tokens) {
+                            entries.add(new RedisAlarmEntry(
+                                    buildKey(memberId, alarmId, AlarmType.PREPARE, token, i, remainingMinutes), ttl));
+                        }
                     }
                 }
             }
@@ -135,6 +170,18 @@ public class AlarmRedisService {
             }
         }
         return idx != null ? base + "-" + idx : base;
+    }
+
+    private String buildPrepareBeforeKey(Long memberId, Long alarmId, String token) {
+        return "alarm-" + memberId + "-" + alarmId + "-prepare-before-" +
+                BEFORE_ALARM_MINUTES + "-" + token + "-" + BEFORE_ALARM_INDEX_OFFSET;
+    }
+
+    private boolean isDepartureBeforeCoveredByPrepareInterval(Integer prepareTime, Integer interval) {
+        if (prepareTime == null || interval == null || interval <= 0) return false;
+
+        int beforeMinutes = (int) BEFORE_ALARM_MINUTES;
+        return prepareTime > beforeMinutes && (prepareTime - beforeMinutes) % interval == 0;
     }
 
     private record RedisAlarmEntry(String key, long ttlMillis) {}
