@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
  *  ex) key가 alarm-1-10-prepare-start-token-1 이라면
  *  => prepareStart = false, remainingMinutes = 20
  *
+ *  ex) key가 alarm-1-10-prepare-before-10-token-10000 이라면
+ *  => prepareStart = true, remainingMinutes = 10
+ *
  * */
 @Component
 @Slf4j
@@ -58,6 +61,11 @@ public class RedisKeyExpirationListener extends KeyExpirationEventMessageListene
                     prepareStart = true;
                     tokenStartInclusive = 5;
                 } else if (parts.length > 6 && "remain".equals(parts[4])) {
+                    remainingMinutes = Integer.parseInt(parts[5]);
+                    tokenStartInclusive = 6;
+                } else if (parts.length > 6 && "before".equals(parts[4])) {
+                    // prepare-before는 "N분 후에 준비해야 해요" 문구에 사용한다.
+                    prepareStart = true;
                     remainingMinutes = Integer.parseInt(parts[5]);
                     tokenStartInclusive = 6;
                 }

@@ -99,6 +99,10 @@ public class FcmSendService {
     private String buildNotificationBody(RedisMessageDto dto) {
         if ("prepare".equalsIgnoreCase(dto.getAlarmType())) {
             if (Boolean.TRUE.equals(dto.getPrepareStart())) {
+                if (dto.getRemainingMinutes() != null) {
+                    // 준비 시작 전 사전 알림
+                    return dto.getRemainingMinutes() + "분 후에 준비해야 해요";
+                }
                 return "지금 준비 시작해야 해요";
             }
             if (dto.getRemainingMinutes() != null) {
