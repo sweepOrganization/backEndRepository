@@ -21,6 +21,7 @@ import java.util.List;
 public class AlarmRedisService {
 
     private static final byte[] EMPTY_VALUE = new byte[0];
+    private static final long BEFORE_ALARM_MINUTES = 10L;   // 10분전
 
     private final StringRedisTemplate redisTemplate;
 
@@ -51,6 +52,18 @@ public class AlarmRedisService {
         log.info("출발 시간:{}--- 현재시간:{}",departureTime,now);
         log.info("출발 알림이 생성이 가능한가?:{}",departureTime.isAfter(now));
 
+        // 출발 10분 전 알림 추가
+        LocalDateTime departureBeforeTime = departureTime.minusMinutes(BEFORE_ALARM_MINUTES);
+
+        if (departureBeforeTime.isAfter(now)) {
+            long ttl = Duration.between(now, departureBeforeTime).toMillis();
+            for (String token : tokens) {
+                entries.add(new RedisAlarmEntry(
+                        buildKey(memberId, alarmId, AlarmType.DEPARTURE, token, -1), ttl));
+            }
+        }
+
+
         // 출발 알람
         if (departureTime.isAfter(now)) {
             long ttl = Duration.between(now, departureTime).toMillis();
@@ -60,20 +73,32 @@ public class AlarmRedisService {
             }
         }
 
+
+
         // 준비 알람 — 미래 트리거만
         if (prepareTime != null && interval != null && interval > 0) {
             LocalDateTime prepareStart = departureTime.minusMinutes(prepareTime);
             int count = prepareTime / interval;
             for (int i = 0; i < count; i++) {
                 LocalDateTime triggerTime = prepareStart.plusMinutes((long) i * interval);
+                LocalDateTime beforeTriggerTime = triggerTime.minusMinutes(BEFORE_ALARM_MINUTES);   // 준비 10분전 추가
+
+                if (beforeTriggerTime.isAfter(now)) {
+                    long ttl = Duration.between(now, beforeTriggerTime).toMillis();
+                    for (String token : tokens) {
+                        entries.add(new RedisAlarmEntry(
+                                buildKey(memberId, alarmId, AlarmType.PREPARE, token, -(i + 1)), ttl));
+                    }
+                }
+
                 if (triggerTime.isAfter(now)) {
-                    int remainingMinutes = prepareTime - (i * interval);
                     long ttl = Duration.between(now, triggerTime).toMillis();
                     for (String token : tokens) {
                         entries.add(new RedisAlarmEntry(
-                                buildKey(memberId, alarmId, AlarmType.PREPARE, token, i, remainingMinutes), ttl));
+                                buildKey(memberId, alarmId, AlarmType.PREPARE, token, i), ttl));
                     }
                 }
+
             }
         }
 
@@ -121,19 +146,7 @@ public class AlarmRedisService {
     }
 
     private String buildKey(Long memberId, Long alarmId, AlarmType type, String token, Integer idx) {
-        return buildKey(memberId, alarmId, type, token, idx, null);
-    }
-
-    private String buildKey(Long memberId, Long alarmId, AlarmType type, String token, Integer idx,
-                            Integer remainingMinutes) {
         String base = "alarm-" + memberId + "-" + alarmId + "-" + type.name().toLowerCase() + "-" + token;
-        if (type == AlarmType.PREPARE && remainingMinutes != null) {
-            if (idx != null && idx == 0) {
-                base = "alarm-" + memberId + "-" + alarmId + "-prepare-start-" + token;
-            } else {
-                base = "alarm-" + memberId + "-" + alarmId + "-prepare-remain-" + remainingMinutes + "-" + token;
-            }
-        }
         return idx != null ? base + "-" + idx : base;
     }
 
