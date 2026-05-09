@@ -90,7 +90,7 @@ public class AlarmTicketRepo {
                 .on(alarm.member.eq(member))
                 .where(alarm.member.id.eq(memberId).and(alarm.deleted.isFalse())
                         .and(alarm.arrivalTime.after(currentTime)))
-                .orderBy(alarm.arrivalTime.asc())
+                .orderBy(alarm.arrivalTime.asc(),alarm.prepareTime.asc())
                 .fetch();
     }
 }
