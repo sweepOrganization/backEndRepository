@@ -34,6 +34,7 @@ public class CustomOAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSucc
         this.objectMapper = objectMapper;
         this.ga4Service = ga4Service;
     }
+
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
         try {
@@ -48,9 +49,11 @@ public class CustomOAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSucc
                 ga4Service.sendDailyActiveUserEvent(customOAuth2User.getId());
             }
 
-            response.sendRedirect("http://localhost:5173/oauth2/callback?token="+accessToken);
+     
             //response.addHeader(AUTHORIZATION, TOKEN_PREFIX.getValue() + accessToken);
             //response.sendRedirect("https://hodadak.vercel.app/oauth2/callback?token=" + accessToken);
+            //response.sendRedirect("http://localhost:5173/oauth2/callback?token="+accessToken);
+            response.sendRedirect("https://hodadak.vercel.app/oauth2/callback?token=" + accessToken);
             log.info("{} 유저에대한 로그인이 정상적으로 되었습니다", customOAuth2User.getEmail());
         }
         catch (Exception e){
@@ -58,6 +61,7 @@ public class CustomOAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSucc
             sendErrorResponse(response, HttpStatus.BAD_REQUEST,e.getMessage());
         }
     }
+
     private void sendErrorResponse(HttpServletResponse response, HttpStatus httpStatus, String message) throws
             IOException {
         response.setStatus(httpStatus.value());

@@ -30,8 +30,11 @@ public class AlarmBatchDto {
     @Schema(description = "목적지 도착 예정 시각", example = "2024-06-01T09:00:00")
     private LocalDateTime arrivalTime;
 
-    @Schema(description = "Route.totalTime(분). null이면 소요 시간 불명으로 해당 알람 스킵", example = "45")
+    @Schema(description = "Route.totalTime(분). actualTime이 0 또는 null이면 fallback으로 사용", example = "45")
     private Integer totalTime;
+
+    @Schema(description = "실제 소요 시간(분). 0 또는 null이면 Route.totalTime을 사용", example = "40")
+    private Integer actualTime;
 
     @Schema(description = "준비물 입니다", example = "준비물 덩어리")
     private String checkList;

@@ -1,5 +1,6 @@
 package com.sweep.project.alarm.batch;
 
+import com.sweep.project.alarm.service.AlarmTimeCalculator;
 import com.sweep.project.fcm.domain.FcmToken;
 import com.sweep.project.fcm.repository.FcmTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +25,8 @@ import java.util.stream.Collectors;
  * 1. 청크 내 AlarmBatchDto 를 memberId 기준으로 그룹핑
  * 2. 멤버별 FCM 토큰 조회
  * 3. 각 Alarm 에 대해
- *    a) totalTime(분) 직접 사용
- *    b) departureTime  = arrivalTime - totalTime
+ *    a) actualTime(분)-을 우선 사용하고, 없으면 totalTime(분) 사용   // actualTime- '실제' 계산된 이동시간, totalTime- 기본 '예상' 이동 시간
+ *    b) departureTime  = arrivalTime - travelTime
  *    c) 출발 알람  1개 : triggerTime = departureTime
  *    d) 준비 알람  N개 : prepareStartTime = departureTime - prepareTime
  *                        N = prepareTime / interval  (정수 나눗셈)
@@ -81,9 +82,11 @@ public class AlarmBatchWriter implements ItemWriter<AlarmBatchDto> {
 
             for (AlarmBatchDto dto : entry.getValue()) {
                 collectEntries(dto, memberId, tokens, entries);
-                if (dto.getTotalTime() != null && dto.getArrivalTime() != null
+                if (AlarmTimeCalculator.hasTravelTime(dto.getActualTime(), dto.getTotalTime())
+                        && dto.getArrivalTime() != null
                         && dto.getCheckList() != null && !dto.getCheckList().isBlank()) {
-                    LocalDateTime departureTime = dto.getArrivalTime().minusMinutes(dto.getTotalTime());
+                    LocalDateTime departureTime = AlarmTimeCalculator.calculateDepartureTime(
+                            dto.getArrivalTime(), dto.getActualTime(), dto.getTotalTime());
                     long ttl = Math.max(0L, Duration.between(schedulerRunAt, departureTime).toMillis());
                     checklistEntries.add(new ChecklistEntry(
                             "alarm-" + memberId + "-" + dto.getAlarmId() + "-checklist",
@@ -106,19 +109,20 @@ public class AlarmBatchWriter implements ItemWriter<AlarmBatchDto> {
 
     private void collectEntries(AlarmBatchDto dto, Long memberId, List<String> tokens,
                                 List<RedisAlarmEntry> entries) {
-        if (dto.getTotalTime() == null) {
-            log.warn("[AlarmWriter] totalTime null — alarmId={} 스킵", dto.getAlarmId());
+        if (!AlarmTimeCalculator.hasTravelTime(dto.getActualTime(), dto.getTotalTime())) {
+            log.warn("[AlarmWriter] travelTime null — alarmId={} 스킵", dto.getAlarmId());
             return;
         }
         /*
-        * 이거같은 경우에는 알람 생성시 ARRIVALTIME을 반드시 입력받게 할거라서 고려할 문제는 아닌거같은대 일단은 냅두도록 하겠음.
-        * */
+         * 이거같은 경우에는 알람 생성시 ARRIVALTIME을 반드시 입력받게 할거라서 고려할 문제는 아닌거같은대 일단은 냅두도록 하겠음.
+         * */
         if (dto.getArrivalTime() == null) {
             log.warn("[AlarmWriter] arrivalTime null — alarmId={} 스킵", dto.getAlarmId());
             return;
         }
 
-        LocalDateTime departureTime = dto.getArrivalTime().minusMinutes(dto.getTotalTime());
+        LocalDateTime departureTime = AlarmTimeCalculator.calculateDepartureTime(
+                dto.getArrivalTime(), dto.getActualTime(), dto.getTotalTime());
 
         // 출발 알람 1개
         long departureTtl = Math.max(0L, Duration.between(schedulerRunAt, departureTime).toMillis());
@@ -129,7 +133,8 @@ public class AlarmBatchWriter implements ItemWriter<AlarmBatchDto> {
 
         // 준비 알람 N개
         if (dto.getPrepareTime() != null && dto.getInterval() != null && dto.getInterval() > 0) {
-            LocalDateTime prepareStart = departureTime.minusMinutes(dto.getPrepareTime());
+            LocalDateTime prepareStart = AlarmTimeCalculator.calculatePrepareStartTime(
+                    dto.getArrivalTime(), dto.getActualTime(), dto.getTotalTime(), dto.getPrepareTime());
             int count = dto.getPrepareTime() / dto.getInterval();
 
             for (int i = 0; i < count; i++) {

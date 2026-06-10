@@ -74,6 +74,7 @@ public class AlarmTicketRepo {
                         alarm.interval,
                         alarm.arrivalTime,
                         route.totalTime,
+                        alarm.actualTime,
                         alarm.checklist))
                 .from(alarm)
                 .join(alarm.route, route)

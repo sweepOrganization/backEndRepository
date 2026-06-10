@@ -63,7 +63,7 @@ public class AlarmService {
                     .stream().map(FcmToken::getToken).collect(Collectors.toList());
             alarmRedisService.registerTodayIfFirable(
                     alarm.getAlarmId(), alarm.getMemberId(), req.startTime(), req.arrivalTime(),
-                    totalTime, req.prepareTime(), req.interval(), tokens, req.checklist(),now);
+                    alarm.getActualTime(), totalTime, req.prepareTime(), req.interval(), tokens, req.checklist(),now);
         }
 
         return new AlarmDetailResponse(alarm);
@@ -128,9 +128,38 @@ public class AlarmService {
                     .stream().map(FcmToken::getToken).collect(Collectors.toList());
             alarmRedisService.registerTodayIfFirable(
                     alarm.getAlarmId(), alarm.getMemberId(), req.startTime(), req.arrivalTime(),
-                    totalTime, req.prepareTime(), newInterval, tokens, req.checklist(),now);
+                    alarm.getActualTime(), totalTime, req.prepareTime(), newInterval, tokens, req.checklist(),now);
         }
     }
+
+    // 등록된 알림수정
+    public void updateAlarmSettings(Long alarmId, AlarmSettingsUpdateRequest req) {
+        Alarm alarm = alarmRepository.findById(alarmId)
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 알람"));
+
+        if (req.interval() > req.prepareTime()) {
+            throw new RuntimeException("다시알림 간격은 준비시간보다 클 수 없습니다");
+        }
+
+        Integer totalTime = alarm.getRoute().getTotalTime();
+        LocalDateTime newStartTime = AlarmTimeCalculator.calculatePrepareStartTime(
+                alarm.getArrivalTime(), alarm.getActualTime(), totalTime, req.prepareTime());
+
+        alarmRedisService.deleteAlarmKeys(alarm.getMemberId(), alarm.getAlarmId());
+        alarm.updateSettings(newStartTime, req.prepareTime(), req.interval(), req.checklist());
+
+        if (AlarmTimeCalculator.hasTravelTime(alarm.getActualTime(), totalTime)) {
+            LocalDateTime now = LocalDateTime.now();
+            List<String> tokens = fcmTokenRepository.findAllByMemberId(alarm.getMemberId())
+                    .stream().map(FcmToken::getToken).collect(Collectors.toList());
+            alarmRedisService.registerTodayIfFirable(
+                    alarm.getAlarmId(), alarm.getMemberId(),
+                    newStartTime, alarm.getArrivalTime(),
+                    alarm.getActualTime(), totalTime, req.prepareTime(), req.interval(),
+                    tokens, req.checklist(), now);
+        }
+    }
+
 
     public void fireAndForgetUpdate(Long alarmId){
         Alarm alarm = alarmRepository.findById(alarmId)

@@ -38,14 +38,14 @@ public class AlarmRedisService {
     public void registerTodayIfFirable(Long alarmId, Long memberId,
                                        LocalDateTime startTime,
                                        LocalDateTime arrivalTime,
-                                       int totalTime,
+                                       Integer actualTime, Integer totalTime,
                                        Integer prepareTime, Integer interval,
                                        List<String> tokens,
                                        String checkList,LocalDateTime now) {
         if (tokens.isEmpty()) return;
         if (!startTime.toLocalDate().equals(LocalDate.now())) return;
 
-        LocalDateTime departureTime = arrivalTime.minusMinutes(totalTime);
+        LocalDateTime departureTime = AlarmTimeCalculator.calculateDepartureTime(arrivalTime, actualTime, totalTime);
         List<RedisAlarmEntry> entries = new ArrayList<>();
 
         log.info("출발 시간:{}--- 현재시간:{}",departureTime,now);
@@ -62,7 +62,8 @@ public class AlarmRedisService {
 
         // 준비 알람 — 미래 트리거만
         if (prepareTime != null && interval != null && interval > 0) {
-            LocalDateTime prepareStart = departureTime.minusMinutes(prepareTime);
+            LocalDateTime prepareStart = AlarmTimeCalculator.calculatePrepareStartTime(
+                    arrivalTime, actualTime, totalTime, prepareTime);
             int count = prepareTime / interval;
             for (int i = 0; i < count; i++) {
                 LocalDateTime triggerTime = prepareStart.plusMinutes((long) i * interval);

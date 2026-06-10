@@ -8,6 +8,7 @@ import com.sweep.project.security.filter.JwtAuthFilter;
 import com.sweep.project.security.handler.CustomLogOutHandler;
 import com.sweep.project.security.handler.CustomOAuth2LoginFailer;
 import com.sweep.project.security.handler.CustomOAuth2LoginSuccessHandler;
+import com.sweep.project.security.repository.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.sweep.project.security.service.CustomOAuth2Service;
 import com.sweep.project.util.jwt.JwtUtility;
 import lombok.RequiredArgsConstructor;
@@ -34,14 +35,15 @@ public class SecurityConfig {
     private final static String[] freePath = {
             "/member/logout",
             "/v3/api-docs",
-            "/v3/api-docs/**",      // 추가
-            "/v3/api-docs.yaml",    // 추가
+            "/v3/api-docs/**",
+            "/v3/api-docs.yaml",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/swagger-resources/**", // 추가
+            "/swagger-resources/**",
             "/actuator/**",
     };
     private final static String[] adminPath = {};
+
     @Bean
     public PasswordEncoder passwordEncoder(){
         return new BCryptPasswordEncoder();
@@ -64,7 +66,11 @@ public class SecurityConfig {
                 .invalidateHttpSession(true)
                 .logoutSuccessHandler(new CustomLogOutHandler(jwtUtility,redisUserInfoService,objectMapper)));
 
-        security.oauth2Login(oauth2->oauth2.userInfoEndpoint(userinfo->userinfo.userService(
+        security.oauth2Login(oauth2->oauth2
+                .authorizationEndpoint(endpoint ->
+                        endpoint.authorizationRequestRepository(
+                                new HttpCookieOAuth2AuthorizationRequestRepository()))
+                .userInfoEndpoint(userinfo->userinfo.userService(
                         new CustomOAuth2Service(memberRepository)))
                 .successHandler(new CustomOAuth2LoginSuccessHandler(jwtUtility, redisUserInfoService, objectMapper, ga4Service))
                 .failureHandler(new CustomOAuth2LoginFailer(objectMapper))
@@ -73,7 +79,6 @@ public class SecurityConfig {
         security.authorizeHttpRequests(auth ->
                 auth.requestMatchers(freePath).permitAll()
                         .anyRequest().authenticated());
-
 
         return security.build();
     }

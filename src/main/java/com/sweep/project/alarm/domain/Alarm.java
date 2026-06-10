@@ -69,7 +69,7 @@ public class Alarm {
     // ── 변경 메서드 ────────────────────────────────────────────────────────────
 
     public void updateAlarm(Route route, LocalDateTime arrivalTime, LocalDateTime startTime,
-                         Integer prepareTime, Integer interval,
+                            Integer prepareTime, Integer interval,
                             String title, String checklist) {
         this.route = route;
         this.arrivalTime = arrivalTime;
@@ -79,6 +79,15 @@ public class Alarm {
         this.title = title;
         this.checklist = checklist;
     }
+
+    // 등록된 알림 수정
+    public void updateSettings(LocalDateTime startTime, Integer prepareTime, Integer interval, String checklist) {
+        this.startTime = startTime;
+        this.prepareTime = prepareTime;
+        this.interval = interval;
+        this.checklist = checklist;
+    }
+
     public void updateActualTime(Integer actualTime){
         this.actualTime=actualTime;
     }

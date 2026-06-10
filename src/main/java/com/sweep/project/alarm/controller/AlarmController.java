@@ -128,6 +128,31 @@ public class AlarmController {
         return ApiResponseUtil.SuccessApiResponse("알람 수정 성공", null);
     }
 
+    // 등록된 알림 수정
+    @Operation(
+            summary = "알람 설정 수정",
+            description = "준비시간, 다시알림 간격, 준비물 3가지만 수정합니다. 당일 알람이면 Redis 재등록됩니다."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "알람 설정 수정 성공",
+                    useReturnTypeSchema = true),
+            @ApiResponse(responseCode = "400", description = "요청 값 검증 실패",
+                    content = @Content(schema = @Schema())),
+            @ApiResponse(responseCode = "401", description = "인증 실패 - JWT 토큰이 없거나 유효하지 않습니다.",
+                    content = @Content(schema = @Schema()))
+    })
+    @Parameter(name = "Authorization", description = "JWT 액세스 토큰 (Bearer 형식)",
+            required = true, example = "Bearer [tokenvalue]", in = ParameterIn.HEADER)
+    @PatchMapping("/{alarmId}/settings")
+    public ApiResponseUtil<Void> updateAlarmSettings(
+            @Parameter(description = "수정할 알람 ID", required = true, example = "1")
+            @PathVariable Long alarmId,
+            @Valid @RequestBody AlarmSettingsUpdateRequest request
+    ) {
+        alarmService.updateAlarmSettings(alarmId, request);
+        return ApiResponseUtil.SuccessApiResponse("알람 설정 수정 성공", null);
+    }
+
     @Operation(summary = "알람 삭제", description = "특정 알람을 삭제(soft delete)합니다. 연관된 Redis 키도 함께 제거됩니다.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "알람 삭제 성공",
@@ -152,7 +177,7 @@ public class AlarmController {
     public void needCheckUpdateWithFireAndForget(
             @Parameter(description = "변경사항 확인한 알람 ID", required = true, example = "1")
             @PathVariable Long alarmId){
-            alarmService.fireAndForgetUpdate(alarmId);
+        alarmService.fireAndForgetUpdate(alarmId);
     }
 
     @Operation(summary = "지하철 알람의 경우 실질 시간 업데이트",description = "알람의 경우 actualtime이 초기값이" +
