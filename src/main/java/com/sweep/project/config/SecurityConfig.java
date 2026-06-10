@@ -1,6 +1,7 @@
 package com.sweep.project.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sweep.project.ga4.Ga4Service;
 import com.sweep.project.member.repository.MemberRepositoryAdvance;
 import com.sweep.project.redis.RedisUserInfoService;
 import com.sweep.project.security.filter.JwtAuthFilter;
@@ -29,6 +30,7 @@ public class SecurityConfig {
     private final RedisUserInfoService redisUserInfoService;
     private final JwtUtility jwtUtility;
     private final WebConfig webConfig;
+    private final Ga4Service ga4Service;
 
     private final static String[] freePath = {
             "/member/logout",
@@ -57,7 +59,7 @@ public class SecurityConfig {
 
         security.sessionManagement(session->session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        security.addFilterAfter(new JwtAuthFilter(redisUserInfoService,jwtUtility,memberRepository,objectMapper)
+        security.addFilterAfter(new JwtAuthFilter(redisUserInfoService, jwtUtility, memberRepository, objectMapper, ga4Service)
                 , UsernamePasswordAuthenticationFilter.class);
 
         security.logout(logout->logout.logoutUrl("/member/logout")
@@ -70,7 +72,7 @@ public class SecurityConfig {
                                 new HttpCookieOAuth2AuthorizationRequestRepository()))
                 .userInfoEndpoint(userinfo->userinfo.userService(
                         new CustomOAuth2Service(memberRepository)))
-                .successHandler(new CustomOAuth2LoginSuccessHandler(jwtUtility,redisUserInfoService,objectMapper))
+                .successHandler(new CustomOAuth2LoginSuccessHandler(jwtUtility, redisUserInfoService, objectMapper, ga4Service))
                 .failureHandler(new CustomOAuth2LoginFailer(objectMapper))
         );
 

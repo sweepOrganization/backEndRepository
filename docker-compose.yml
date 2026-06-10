@@ -25,6 +25,8 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       FCM_IMAGE: ${FCM_IMAGE}
+      GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID}
+      GA4_API_SECRET: ${GA4_API_SECRET}
     networks:
       - sweepMap-network
     restart: always

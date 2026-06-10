@@ -107,6 +107,7 @@ public class RedisGeoCacheAop {
                         routes.add(tr);
                     }
                 }
+                //--->노션별 그래픽 데이터 캐싱부문
                 return routes;
             }
 
@@ -135,6 +136,8 @@ public class RedisGeoCacheAop {
                     .collect(Collectors.toList());
 
             routeDbService.updateJsons(routeIds,routeJsonList);
+
+            //--->노션별 그래픽 데이터 캐싱부문
 
             // Redis 캐싱
             routeRedisService.saveIfAbsent(type, startLat, startLon, endLat, endLon, routeIds, routeJsonList);

@@ -28,7 +28,7 @@ public class MemberController {
             @ApiResponse(responseCode = "200", description = "로그아웃 성공",
                     useReturnTypeSchema = true),
             @ApiResponse(responseCode = "400", description = "토큰이 없습니다.",
-                    content = @Content(schema = @Schema(implementation = ApiResponseUtil.class)))
+                    content = @Content(schema = @Schema()))
     })
     @Parameter(name = "Authorization",
             description = "요청시 토큰값을 넣어주셔야됩니다.",
@@ -50,7 +50,7 @@ public class MemberController {
                     },
                     useReturnTypeSchema = true),
             @ApiResponse(responseCode = "401", description = "권한이 부족합니다.",
-                    content = @Content(schema = @Schema(implementation = ApiResponseUtil.class)))
+                    content = @Content(schema = @Schema()))
     })
     @Parameter(name = "Authorization",
             description = "요청시 토큰값을 넣어주셔야됩니다.",

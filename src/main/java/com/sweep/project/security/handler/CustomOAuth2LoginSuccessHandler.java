@@ -1,6 +1,7 @@
 package com.sweep.project.security.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sweep.project.ga4.Ga4Service;
 import com.sweep.project.redis.RedisUserInfoService;
 import com.sweep.project.security.domain.CustomOAuth2User;
 import com.sweep.project.util.ApiResponseUtil;
@@ -23,12 +24,15 @@ public class CustomOAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSucc
     private JwtUtility jwtUtility;
     private RedisUserInfoService redisUserInfoService;
     private ObjectMapper objectMapper;
+    private Ga4Service ga4Service;
 
     public CustomOAuth2LoginSuccessHandler(JwtUtility jwtUtility,
-                                           RedisUserInfoService redisUserInfoService, ObjectMapper objectMapper) {
+                                           RedisUserInfoService redisUserInfoService, ObjectMapper objectMapper,
+                                           Ga4Service ga4Service) {
         this.jwtUtility = jwtUtility;
         this.redisUserInfoService = redisUserInfoService;
         this.objectMapper = objectMapper;
+        this.ga4Service = ga4Service;
     }
 
     @Override
@@ -40,6 +44,14 @@ public class CustomOAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSucc
             String refreshToken = jwtUtility.genRefreshToken(customOAuth2User.getId());
             String member = objectMapper.writeValueAsString(customOAuth2User.getMember());
             redisUserInfoService.setLoginUserInfo(customOAuth2User.getId(), member, refreshToken);
+
+            if (redisUserInfoService.checkAndSetDailyAccess(customOAuth2User.getId())) {
+                ga4Service.sendDailyActiveUserEvent(customOAuth2User.getId());
+            }
+
+     
+            //response.addHeader(AUTHORIZATION, TOKEN_PREFIX.getValue() + accessToken);
+            //response.sendRedirect("https://hodadak.vercel.app/oauth2/callback?token=" + accessToken);
             //response.sendRedirect("http://localhost:5173/oauth2/callback?token="+accessToken);
             response.sendRedirect("https://hodadak.vercel.app/oauth2/callback?token=" + accessToken);
             log.info("{} 유저에대한 로그인이 정상적으로 되었습니다", customOAuth2User.getEmail());

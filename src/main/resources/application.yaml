@@ -117,3 +117,7 @@ management:
         include: "prometheus"
 fcm:
   image: ${FCM_IMAGE}
+
+ga4:
+  measurement-id: ${GA4_MEASUREMENT_ID}
+  api-secret: ${GA4_API_SECRET}
