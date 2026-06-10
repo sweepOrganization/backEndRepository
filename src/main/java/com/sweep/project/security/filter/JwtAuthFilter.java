@@ -2,6 +2,7 @@ package com.sweep.project.security.filter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sweep.project.ga4.Ga4Service;
 import com.sweep.project.member.domain.Member;
 import com.sweep.project.member.repository.MemberRepositoryAdvance;
 import com.sweep.project.redis.RedisUserInfoService;
@@ -28,18 +29,19 @@ import static com.sweep.project.util.jwt.TokenEnum.TOKEN_PREFIX;
 
 @Slf4j
 public class JwtAuthFilter extends OncePerRequestFilter {
-    public JwtAuthFilter(RedisUserInfoService redisUserInfoService, JwtUtility jwtUtility, MemberRepositoryAdvance memberRepository, ObjectMapper objectMapper) {
+    public JwtAuthFilter(RedisUserInfoService redisUserInfoService, JwtUtility jwtUtility, MemberRepositoryAdvance memberRepository, ObjectMapper objectMapper, Ga4Service ga4Service) {
         this.redisUserInfoService = redisUserInfoService;
         this.jwtUtility = jwtUtility;
-        this.memberRepository=memberRepository;
-        this.objectMapper=objectMapper;
+        this.memberRepository = memberRepository;
+        this.objectMapper = objectMapper;
+        this.ga4Service = ga4Service;
     }
 
     private RedisUserInfoService redisUserInfoService;
     private JwtUtility jwtUtility;
     private MemberRepositoryAdvance memberRepository;
-
     private ObjectMapper objectMapper;
+    private Ga4Service ga4Service;
 
 
     private static final String[] freePassPath = {
@@ -92,6 +94,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         Authentication auth = new UsernamePasswordAuthenticationToken(
                 customUserDetail, null, customUserDetail.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(auth);
+
+        if (redisUserInfoService.checkAndSetDailyAccess(memberId)) {
+            ga4Service.sendDailyActiveUserEvent(memberId);
+        }
+
         filterChain.doFilter(request, response);
 
     }

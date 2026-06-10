@@ -7,6 +7,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -18,6 +19,7 @@ public class RedisUserInfoService {
     private final RedisTemplate<String,String> redisTemplate;
     private final static String userInfoKey="member-info-key-";
     private final static String userRefreshTokenKey="member-refresh-key-";
+    private final static String userDailyAccessKey="member-daily-access-";
     private final StringRedisTemplate stringRedisTemplate;
 
     public void setLoginUserInfo(Long id,String member,String refreshToken){
@@ -50,5 +52,14 @@ public class RedisUserInfoService {
         return  redisTemplate.opsForValue().get(userRefreshTokenKey+memberId)!=null;
     }
 
+    /**
+     * 오늘 날짜 기준으로 접속 기록이 없으면 Redis에 캐싱 후 true 반환.
+     * 이미 기록이 있으면 false 반환.
+     */
+    public boolean checkAndSetDailyAccess(Long memberId) {
+        String key = userDailyAccessKey + memberId + "-" + LocalDate.now();
+        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(key, "1", 1, TimeUnit.DAYS);
+        return Boolean.TRUE.equals(isNew);
+    }
 
 }
