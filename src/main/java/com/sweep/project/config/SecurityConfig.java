@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sweep.project.ga4.Ga4Service;
 import com.sweep.project.member.repository.MemberRepositoryAdvance;
 import com.sweep.project.redis.RedisUserInfoService;
+import com.sweep.project.security.filter.InAppBrowserFilter;
 import com.sweep.project.security.filter.JwtAuthFilter;
 import com.sweep.project.security.handler.CustomLogOutHandler;
 import com.sweep.project.security.handler.CustomOAuth2LoginFailer;
@@ -18,6 +19,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -58,6 +60,9 @@ public class SecurityConfig {
         security.cors(cors->cors.configurationSource(webConfig.corsConfigurationSource()));
 
         security.sessionManagement(session->session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        // 카톡 인앱 브라우저 감지 → OAuth 리다이렉트 필터보다 먼저 가로채서 외부 브라우저로 우회
+        security.addFilterBefore(new InAppBrowserFilter(), OAuth2AuthorizationRequestRedirectFilter.class);
 
         security.addFilterAfter(new JwtAuthFilter(redisUserInfoService, jwtUtility, memberRepository, objectMapper, ga4Service)
                 , UsernamePasswordAuthenticationFilter.class);
