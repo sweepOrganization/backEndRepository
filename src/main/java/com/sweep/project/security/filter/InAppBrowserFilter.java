@@ -17,8 +17,8 @@ public class InAppBrowserFilter extends OncePerRequestFilter {
     // 외부 브라우저로 열어줄 프론트 주소 (메인 = 로그인 화면)
     private static final String TARGET_HOST = "hodadak.vercel.app";
 
-    // 인앱 브라우저로 OAuth 로그인을 시도하면 구글이 차단하는 진입 경로
-    private static final String OAUTH_PATH = "/oauth2/authorization";
+    // 구글 OAuth 진입 경로만 가로챔 (카카오는 webview에서 정상 동작하므로 제외)
+    private static final String OAUTH_PATH = "/oauth2/authorization/google";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
